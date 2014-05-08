@@ -1,0 +1,132 @@
+#!/usr/bin/env ruby
+
+require 'thor'
+require 'fileutils'
+require 'openssl'
+require 'rest_client'
+require 'base64'
+require 'json'
+
+module ErrorPrinter
+  def print_error(err)
+    puts 'There seems to have been a problem... :-/'
+    puts "Error: #{err}"
+    errors = JSON.parse(err.response, symbolize_names: true)[:errors]
+    if errors
+      errors.each do |k, v| puts "#{k}:\t#{v.join(', ')}" end
+    end
+  end
+end
+
+class Currency < Thor
+  include ErrorPrinter
+  
+  desc 'list', 'List all known currencies'
+  def list
+    response = RestClient.get "#{options[:server]}/currencies", content_type: :json
+    data = JSON.parse(response.body, symbolize_names: true)
+    data[:currencies].each do |c| puts c[:name] end
+  end
+  
+  desc 'register <name> <url>', 'Registers a new currency. The name must be unique, and the URL should have more information about the currency.'
+  def register(name, url)
+    key = OpenSSL::PKey::RSA.new 2048
+    data = { public_key: key.public_key.to_pem, name: name, url: url }
+    
+    begin
+      response = RestClient.post "#{options[:server]}/currencies", data, content_type: :json
+      currency = JSON.parse(response.body, symbolize_names: true)[:currency]
+      puts 'New currency created'
+      puts "name:\t#{currency[:name]}"
+      puts "url:\t#{currency[:url]}"
+      puts "primary account code:\t#{currency[:primary_account][:code]}"
+      
+      # Write key
+      FileUtils.mkdir_p "#{ENV['HOME']}/.mintet"
+      open "#{ENV['HOME']}/.mintet/#{currency[:primary_account][:code]}.pem", 'w' do |io| io.write key.to_pem end
+      open "#{ENV['HOME']}/.mintet/#{name}.pem", 'w' do |io| io.write key.to_pem end
+    rescue => e
+      print_error(e)
+    end
+  end
+end
+
+class Account < Thor
+  include ErrorPrinter
+  
+  desc 'list', 'List all known accounts'
+  def list
+    response = RestClient.get "#{options[:server]}/accounts", content_type: :json
+    data = JSON.parse(response.body, symbolize_names: true)
+    data[:accounts].each do |a|
+      a.each do |k, v|
+        puts "#{k}:\t#{v}"
+      end
+      puts "\n"
+    end
+  end
+  
+  desc 'register <currency>', 'Registers a new account with units <currency>.'
+  def register(currency)
+    key = OpenSSL::PKey::RSA.new 2048
+    data = { public_key: key.public_key.to_pem, currency: currency }
+    
+    begin
+      resp = RestClient.post "#{options.server}/accounts", data, content_type: :json
+      account = JSON.parse(resp.body, symbolize_names: true)[:account]
+      puts 'New account created'
+      puts "code:\t\t#{account[:code]}"
+      puts "balance:\t#{account[:balance]}"
+      
+      # Write key
+      FileUtils.mkdir_p "#{ENV['HOME']}/.mintet"
+      open "#{ENV['HOME']}/.mintet/#{account[:code]}.pem", 'w' do |io| io.write key.to_pem end
+    rescue => e
+      print_error(e)
+    end
+  end
+end
+
+class Hyperledger < Thor
+  include ErrorPrinter
+  
+  class_option :server, type: :string, default: 'http://still-depths-9447.herokuapp.com'
+  
+  desc 'currency SUBCOMMAND', 'Subcommands relating to currencies.'
+  subcommand 'currency', Currency
+  
+  desc 'account SUBCOMMAND', 'Subcommands relating to accounts.'
+  subcommand 'account', Account
+  
+  desc 'issue <amount> <currency>', 'Issue <amount> new units of <currency>.'
+  def issue(amount, currency)
+    data = { currency: currency, amount: amount }
+    
+    key = OpenSSL::PKey::RSA.new File.read("#{ENV['HOME']}/.mintet/#{currency.downcase}.pem")
+    sign = Base64.encode64 key.sign(OpenSSL::Digest::SHA256.new, data.to_json)
+    
+    begin
+      resp = RestClient.post "#{options[:server]}/issues", { issue: data, signature: sign }, content_type: :json
+      puts "#{amount} of #{currency} issued"
+    rescue => e
+      print_error(e)
+    end
+  end
+  
+  desc 'transfer <amount> <source> <destination>', 'Transfer <amount> of units from <source> to <destination>'
+  def transfer(amount, source, destination)
+    key = OpenSSL::PKey::RSA.new File.read("#{ENV['HOME']}/.mintet/#{source}.pem")
+    
+    data = { source: source, destination: destination, amount: amount }
+    sign = Base64.encode64 key.sign(OpenSSL::Digest::SHA256.new, data.to_json)
+    
+    begin
+      resp = RestClient.post "#{options.server}/transfers", { transfer: data, signature: sign }, content_type: :json
+      puts 'Transfer completed!'
+    rescue => e
+      print_error(e)
+    end
+  end
+end
+
+Hyperledger.start(ARGV)
