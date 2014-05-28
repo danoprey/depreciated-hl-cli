@@ -107,7 +107,7 @@ class Hyperledger < Thor
     
     begin
       resp = RestClient.post "#{options[:server]}/issues", { issue: data, signature: sign }, content_type: :json
-      puts "#{amount} new units issued to #{ledger}"
+      puts "#{amount} new units issued to #{currency}"
     rescue => e
       print_error(e)
     end
