@@ -7,7 +7,7 @@ Gem::Specification.new do |spec|
   spec.name          = "hyperledger_cli"
   spec.version       = HyperledgerCli::VERSION
   spec.authors       = ["Daniel Feichtinger"]
-  spec.email         = ["daniel@auxilit.com"]
+  spec.email         = ["df@hyperledger.org"]
   spec.summary       = "A sample CLI for the Hyperledger protocol."
   spec.license       = "MIT"
 

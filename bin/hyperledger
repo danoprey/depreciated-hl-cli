@@ -18,17 +18,17 @@ module ErrorPrinter
   end
 end
 
-class Currency < Thor
+class Ledger < Thor
   include ErrorPrinter
   
-  desc 'list', 'List all known currencies'
+  desc 'list', 'List all known ledgers'
   def list
     response = RestClient.get "#{options[:server]}/currencies", content_type: :json
     data = JSON.parse(response.body, symbolize_names: true)
     data[:currencies].each do |c| puts c[:name] end
   end
   
-  desc 'register <name> <url>', 'Registers a new currency. The name must be unique, and the URL should have more information about the currency.'
+  desc 'register <name> <url>', 'Registers a new ledger. The name must be unique, and the URL should contain more information about the ledger.'
   def register(name, url)
     key = OpenSSL::PKey::RSA.new 2048
     data = { public_key: key.public_key.to_pem, name: name, url: url }
@@ -36,7 +36,7 @@ class Currency < Thor
     begin
       response = RestClient.post "#{options[:server]}/currencies", data, content_type: :json
       currency = JSON.parse(response.body, symbolize_names: true)[:currency]
-      puts 'New currency created'
+      puts 'New ledger created'
       puts "name:\t#{currency[:name]}"
       puts "url:\t#{currency[:url]}"
       puts "primary account code:\t#{currency[:primary_account][:code]}"
@@ -66,7 +66,7 @@ class Account < Thor
     end
   end
   
-  desc 'register <currency>', 'Registers a new account with units <currency>.'
+  desc 'register <ledger>', 'Registers a new account in <ledger>.'
   def register(currency)
     key = OpenSSL::PKey::RSA.new 2048
     data = { public_key: key.public_key.to_pem, currency: currency }
@@ -92,13 +92,13 @@ class Hyperledger < Thor
   
   class_option :server, type: :string, default: 'http://still-depths-9447.herokuapp.com'
   
-  desc 'currency SUBCOMMAND', 'Subcommands relating to currencies.'
-  subcommand 'currency', Currency
+  desc 'ledger SUBCOMMAND', 'Subcommands relating to ledgers.'
+  subcommand 'ledger', Ledger
   
   desc 'account SUBCOMMAND', 'Subcommands relating to accounts.'
   subcommand 'account', Account
   
-  desc 'issue <amount> <currency>', 'Issue <amount> new units of <currency>.'
+  desc 'issue <amount> <ledger>', 'Issue <amount> new units to <ledger>.'
   def issue(amount, currency)
     data = { currency: currency, amount: amount }
     
@@ -107,7 +107,7 @@ class Hyperledger < Thor
     
     begin
       resp = RestClient.post "#{options[:server]}/issues", { issue: data, signature: sign }, content_type: :json
-      puts "#{amount} of #{currency} issued"
+      puts "#{amount} new units issued to #{ledger}"
     rescue => e
       print_error(e)
     end
