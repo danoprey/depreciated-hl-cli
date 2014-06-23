@@ -9,7 +9,6 @@ require 'json'
 
 module ErrorPrinter
   def print_error(err)
-    puts 'There seems to have been a problem... :-/'
     puts "Error: #{err}"
     errors = JSON.parse(err.response, symbolize_names: true)[:errors]
     if errors
@@ -23,28 +22,30 @@ class Ledger < Thor
   
   desc 'list', 'List all known ledgers'
   def list
-    response = RestClient.get "#{options[:server]}/currencies", content_type: :json
+    response = RestClient.get "#{options[:server]}/ledgers", content_type: :json, accept: :json
     data = JSON.parse(response.body, symbolize_names: true)
-    data[:currencies].each do |c| puts c[:name] end
+    data[:ledgers].each do |c| puts c[:name] end
   end
   
   desc 'register <name> <url>', 'Registers a new ledger. The name must be unique, and the URL should contain more information about the ledger.'
   def register(name, url)
-    key = OpenSSL::PKey::RSA.new 2048
-    data = { public_key: key.public_key.to_pem, name: name, url: url }
+    ledger_key = OpenSSL::PKey::RSA.new 2048
+    primary_account_key = OpenSSL::PKey::RSA.new 2048
+    ledger_data = { public_key: ledger_key.public_key.to_pem, name: name, url: url }
+    primary_account_data = { public_key: primary_account_key.public_key.to_pem }
     
     begin
-      response = RestClient.post "#{options[:server]}/currencies", data, content_type: :json
-      currency = JSON.parse(response.body, symbolize_names: true)[:currency]
+      response = RestClient.post "#{options[:server]}/ledgers", { ledger: ledger_data, primary_account: primary_account_data }, content_type: :json, accept: :json
+      ledger = JSON.parse(response.body, symbolize_names: true)[:ledger]
       puts 'New ledger created'
-      puts "name:\t#{currency[:name]}"
-      puts "url:\t#{currency[:url]}"
-      puts "primary account code:\t#{currency[:primary_account][:code]}"
+      puts "name:\t#{ledger[:name]}"
+      puts "url:\t#{ledger[:url]}"
+      puts "primary account code:\t#{ledger[:primary_account][:code]}"
       
       # Write key
       FileUtils.mkdir_p "#{ENV['HOME']}/.mintet"
-      open "#{ENV['HOME']}/.mintet/#{currency[:primary_account][:code]}.pem", 'w' do |io| io.write key.to_pem end
-      open "#{ENV['HOME']}/.mintet/#{name}.pem", 'w' do |io| io.write key.to_pem end
+      open "#{ENV['HOME']}/.mintet/#{ledger[:primary_account][:code]}.pem", 'w' do |io| io.write primary_account_key.to_pem end
+      open "#{ENV['HOME']}/.mintet/#{name}.pem", 'w' do |io| io.write ledger_key.to_pem end
     rescue => e
       print_error(e)
     end
@@ -56,7 +57,7 @@ class Account < Thor
   
   desc 'list', 'List all known accounts'
   def list
-    response = RestClient.get "#{options[:server]}/accounts", content_type: :json
+    response = RestClient.get "#{options[:server]}/accounts", content_type: :json, accept: :json
     data = JSON.parse(response.body, symbolize_names: true)
     data[:accounts].each do |a|
       a.each do |k, v|
@@ -67,12 +68,12 @@ class Account < Thor
   end
   
   desc 'register <ledger>', 'Registers a new account in <ledger>.'
-  def register(currency)
+  def register(ledger)
     key = OpenSSL::PKey::RSA.new 2048
-    data = { public_key: key.public_key.to_pem, currency: currency }
+    data = { public_key: key.public_key.to_pem, ledger: ledger }
     
     begin
-      resp = RestClient.post "#{options.server}/accounts", data, content_type: :json
+      resp = RestClient.post "#{options.server}/accounts", { account: data }, content_type: :json, accept: :json
       account = JSON.parse(resp.body, symbolize_names: true)[:account]
       puts 'New account created'
       puts "code:\t\t#{account[:code]}"
@@ -99,15 +100,15 @@ class Hyperledger < Thor
   subcommand 'account', Account
   
   desc 'issue <amount> <ledger>', 'Issue <amount> new units to <ledger>.'
-  def issue(amount, currency)
-    data = { currency: currency, amount: amount }
+  def issue(amount, ledger)
+    data = { ledger: ledger, amount: amount }
     
-    key = OpenSSL::PKey::RSA.new File.read("#{ENV['HOME']}/.mintet/#{currency.downcase}.pem")
+    key = OpenSSL::PKey::RSA.new File.read("#{ENV['HOME']}/.mintet/#{ledger.downcase}.pem")
     sign = Base64.encode64 key.sign(OpenSSL::Digest::SHA256.new, data.to_json)
     
     begin
-      resp = RestClient.post "#{options[:server]}/issues", { issue: data, signature: sign }, content_type: :json
-      puts "#{amount} new units issued to #{currency}"
+      resp = RestClient.post "#{options[:server]}/issues", { issue: data, signature: sign }, content_type: :json, accept: :json
+      puts "#{amount} new units issued to #{ledger}"
     rescue => e
       print_error(e)
     end
