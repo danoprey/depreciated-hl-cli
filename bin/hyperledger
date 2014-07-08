@@ -43,9 +43,9 @@ class Ledger < Thor
       puts "primary account code:\t#{ledger[:primary_account][:code]}"
       
       # Write key
-      FileUtils.mkdir_p "#{ENV['HOME']}/.mintet"
-      open "#{ENV['HOME']}/.mintet/#{ledger[:primary_account][:code]}.pem", 'w' do |io| io.write primary_account_key.to_pem end
-      open "#{ENV['HOME']}/.mintet/#{name}.pem", 'w' do |io| io.write ledger_key.to_pem end
+      FileUtils.mkdir_p "#{ENV['HOME']}/.hyperledger"
+      open "#{ENV['HOME']}/.hyperledger/#{ledger[:primary_account][:code]}.pem", 'w' do |io| io.write primary_account_key.to_pem end
+      open "#{ENV['HOME']}/.hyperledger/#{name}.pem", 'w' do |io| io.write ledger_key.to_pem end
     rescue => e
       print_error(e)
     end
@@ -80,8 +80,8 @@ class Account < Thor
       puts "balance:\t#{account[:balance]}"
       
       # Write key
-      FileUtils.mkdir_p "#{ENV['HOME']}/.mintet"
-      open "#{ENV['HOME']}/.mintet/#{account[:code]}.pem", 'w' do |io| io.write key.to_pem end
+      FileUtils.mkdir_p "#{ENV['HOME']}/.hyperledger"
+      open "#{ENV['HOME']}/.hyperledger/#{account[:code]}.pem", 'w' do |io| io.write key.to_pem end
     rescue => e
       print_error(e)
     end
@@ -103,7 +103,7 @@ class Hyperledger < Thor
   def issue(amount, ledger)
     data = { ledger: ledger, amount: amount }
     
-    key = OpenSSL::PKey::RSA.new File.read("#{ENV['HOME']}/.mintet/#{ledger.downcase}.pem")
+    key = OpenSSL::PKey::RSA.new File.read("#{ENV['HOME']}/.hyperledger/#{ledger.downcase}.pem")
     sign = Base64.encode64 key.sign(OpenSSL::Digest::SHA256.new, data.to_json)
     
     begin
@@ -116,7 +116,7 @@ class Hyperledger < Thor
   
   desc 'transfer <amount> <source> <destination>', 'Transfer <amount> of units from <source> to <destination>'
   def transfer(amount, source, destination)
-    key = OpenSSL::PKey::RSA.new File.read("#{ENV['HOME']}/.mintet/#{source}.pem")
+    key = OpenSSL::PKey::RSA.new File.read("#{ENV['HOME']}/.hyperledger/#{source}.pem")
     
     data = { source: source, destination: destination, amount: amount }
     sign = Base64.encode64 key.sign(OpenSSL::Digest::SHA256.new, data.to_json)
