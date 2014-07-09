@@ -91,7 +91,7 @@ end
 class Hyperledger < Thor
   include ErrorPrinter
   
-  class_option :server, type: :string, default: 'http://still-depths-9447.herokuapp.com'
+  class_option :server, type: :string, default: 'http://hyperledger-staging-1.herokuapp.com'
   
   desc 'ledger SUBCOMMAND', 'Subcommands relating to ledgers.'
   subcommand 'ledger', Ledger
