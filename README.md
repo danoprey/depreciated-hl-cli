@@ -1,24 +1,17 @@
 # HyperledgerCli
 
-TODO: Write a gem description
+This is a simple CLI for the hyperledger protocol. It is young software
+under active development.
 
 ## Installation
 
-Add this line to your application's Gemfile:
+Hyperledger CLI can be installed with Rubygems:
 
     gem 'hyperledger_cli'
 
-And then execute:
+You will then be able to access hyperledger from the command line:
 
-    $ bundle
-
-Or install it yourself as:
-
-    $ gem install hyperledger_cli
-
-## Usage
-
-TODO: Write usage instructions here
+    $ hyperledger
 
 ## Contributing
 
@@ -27,3 +20,7 @@ TODO: Write usage instructions here
 3. Commit your changes (`git commit -am 'Add some feature'`)
 4. Push to the branch (`git push origin my-new-feature`)
 5. Create a new Pull Request
+
+## License
+
+hyperledger CLI is released under the [MIT License](http://www.opensource.org/licenses/MIT).
