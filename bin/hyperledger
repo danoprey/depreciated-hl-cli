@@ -101,13 +101,13 @@ class Hyperledger < Thor
   
   desc 'issue <amount> <ledger>', 'Issue <amount> new units to <ledger>.'
   def issue(amount, ledger)
-    data = { ledger: ledger, amount: amount }
+    data = { ledger: ledger, amount: amount.to_i }
     
     key = OpenSSL::PKey::RSA.new File.read("#{ENV['HOME']}/.hyperledger/#{ledger.downcase}.pem")
     sign = Base64.encode64 key.sign(OpenSSL::Digest::SHA256.new, data.to_json)
     
     begin
-      resp = RestClient.post "#{options[:server]}/issues", { issue: data, signature: sign }, content_type: :json, accept: :json
+      resp = RestClient.post "#{options[:server]}/issues", { issue: data.merge({resource_signature: sign}) }.to_json, content_type: :json, accept: :json
       puts "#{amount} new units issued to #{ledger}"
     rescue => e
       print_error(e)
@@ -118,11 +118,11 @@ class Hyperledger < Thor
   def transfer(amount, source, destination)
     key = OpenSSL::PKey::RSA.new File.read("#{ENV['HOME']}/.hyperledger/#{source}.pem")
     
-    data = { source: source, destination: destination, amount: amount }
+    data = { source: source, destination: destination, amount: amount.to_i }
     sign = Base64.encode64 key.sign(OpenSSL::Digest::SHA256.new, data.to_json)
     
     begin
-      resp = RestClient.post "#{options.server}/transfers", { transfer: data, signature: sign }, content_type: :json
+      resp = RestClient.post "#{options.server}/transfers", { transfer: data.merge({resource_signature: sign}) }.to_json, content_type: :json, accept: :json
       puts 'Transfer completed!'
     rescue => e
       print_error(e)
