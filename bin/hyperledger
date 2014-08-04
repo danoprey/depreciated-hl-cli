@@ -6,19 +6,11 @@ require 'openssl'
 require 'rest_client'
 require 'base64'
 require 'json'
-
-module ErrorPrinter
-  def print_error(err)
-    puts "Error: #{err}"
-    errors = JSON.parse(err.response, symbolize_names: true)[:errors]
-    if errors
-      errors.each do |k, v| puts "#{k}:\t#{v.join(', ')}" end
-    end
-  end
-end
+require 'securerandom'
+require './lib/hyperledger_cli/error_printer'
 
 class Ledger < Thor
-  include ErrorPrinter
+  include HyperledgerCli::ErrorPrinter
   
   desc 'list', 'List all known ledgers'
   def list
@@ -53,7 +45,7 @@ class Ledger < Thor
 end
 
 class Account < Thor
-  include ErrorPrinter
+  include HyperledgerCli::ErrorPrinter
   
   desc 'list', 'List all known accounts'
   def list
@@ -89,7 +81,7 @@ class Account < Thor
 end
 
 class Hyperledger < Thor
-  include ErrorPrinter
+  include HyperledgerCli::ErrorPrinter
   
   class_option :server, type: :string, default: 'http://hyperledger-staging-1.herokuapp.com'
   
@@ -101,7 +93,7 @@ class Hyperledger < Thor
   
   desc 'issue <amount> <ledger>', 'Issue <amount> new units to <ledger>.'
   def issue(amount, ledger)
-    data = { ledger: ledger, amount: amount.to_i }
+    data = { ledger: ledger, amount: amount.to_i, uuid: SecureRandom.uuid }
     
     key = OpenSSL::PKey::RSA.new File.read("#{ENV['HOME']}/.hyperledger/#{ledger.downcase}.pem")
     sign = Base64.encode64 key.sign(OpenSSL::Digest::SHA256.new, data.to_json)
@@ -118,7 +110,7 @@ class Hyperledger < Thor
   def transfer(amount, source, destination)
     key = OpenSSL::PKey::RSA.new File.read("#{ENV['HOME']}/.hyperledger/#{source}.pem")
     
-    data = { source: source, destination: destination, amount: amount.to_i }
+    data = { source: source, destination: destination, amount: amount.to_i, uuid: SecureRandom.uuid }
     sign = Base64.encode64 key.sign(OpenSSL::Digest::SHA256.new, data.to_json)
     
     begin
