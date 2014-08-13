@@ -7,7 +7,7 @@ require 'rest_client'
 require 'base64'
 require 'json'
 require 'securerandom'
-require './lib/hyperledger_cli/error_printer'
+require_relative '../lib/hyperledger_cli/error_printer'
 
 class Ledger < Thor
   include HyperledgerCli::ErrorPrinter
