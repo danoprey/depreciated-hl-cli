@@ -7,7 +7,7 @@ under active development.
 
 Hyperledger CLI can be installed with Rubygems:
 
-    gem 'hyperledger_cli'
+    gem install hyperledger_cli
 
 You will then be able to access hyperledger from the command line:
 
