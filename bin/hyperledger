@@ -1,124 +1,106 @@
 #!/usr/bin/env ruby
 
 require 'thor'
-require 'fileutils'
-require 'openssl'
-require 'rest_client'
-require 'base64'
-require 'json'
 require 'securerandom'
-require_relative '../lib/hyperledger_cli/error_printer'
+require 'pp'
+require_relative '../lib/hyperledger_cli'
+require_relative '../lib/hyperledger_cli/key'
 
-class Ledger < Thor
-  include HyperledgerCli::ErrorPrinter
+include HyperledgerCli
+
+class Asset < Thor
   
-  desc 'list', 'List all known ledgers'
+  desc 'list', 'List all known assets'
   def list
-    response = RestClient.get "#{options[:server]}/ledgers", content_type: :json, accept: :json
-    data = JSON.parse(response.body, symbolize_names: true)
-    data[:ledgers].each do |c| puts c[:name] end
+    response = get("#{options[:server]}/ledgers")
+    pp response
   end
   
-  desc 'register <name> <url>', 'Registers a new ledger. The name must be unique, and the URL should contain more information about the ledger.'
-  def register(name, url)
-    ledger_key = OpenSSL::PKey::RSA.new 2048
-    primary_account_key = OpenSSL::PKey::RSA.new 2048
-    ledger_data = { public_key: ledger_key.public_key.to_pem, name: name, url: url }
-    primary_account_data = { public_key: primary_account_key.public_key.to_pem }
+  desc 'register <hash>', 'Registers a new asset. The hash must be an unique hex encoded SHA265 hash.'
+  def register(hash)
+    asset_key = Key.new
+    primary_account_key = Key.new
+    data = {
+      ledger: {
+        publicKey: asset_key.public_key,
+        hash: hash,
+        primaryAccountPublicKey: primary_account_key.public_key
+      }
+    }
     
-    begin
-      response = RestClient.post "#{options[:server]}/ledgers", { ledger: ledger_data, primary_account: primary_account_data }, content_type: :json, accept: :json
-      ledger = JSON.parse(response.body, symbolize_names: true)[:ledger]
-      puts 'New ledger created'
-      puts "name:\t#{ledger[:name]}"
-      puts "url:\t#{ledger[:url]}"
-      puts "primary account code:\t#{ledger[:primary_account][:code]}"
-      
-      # Write key
-      FileUtils.mkdir_p "#{ENV['HOME']}/.hyperledger"
-      open "#{ENV['HOME']}/.hyperledger/#{ledger[:primary_account][:code]}.pem", 'w' do |io| io.write primary_account_key.to_pem end
-      open "#{ENV['HOME']}/.hyperledger/#{name}.pem", 'w' do |io| io.write ledger_key.to_pem end
-    rescue => e
-      print_error(e)
-    end
+    response = post("#{options[:server]}/ledgers", data, asset_key)
+    puts 'New asset created'
+    pp response
+    
+    asset_key.write
+    primary_account_key.write
   end
 end
 
 class Account < Thor
-  include HyperledgerCli::ErrorPrinter
-  
   desc 'list', 'List all known accounts'
   def list
-    response = RestClient.get "#{options[:server]}/accounts", content_type: :json, accept: :json
-    data = JSON.parse(response.body, symbolize_names: true)
-    data[:accounts].each do |a|
-      a.each do |k, v|
-        puts "#{k}:\t#{v}"
-      end
-      puts "\n"
-    end
+    response = get "#{options[:server]}/accounts"
+    pp response
   end
   
-  desc 'register <ledger>', 'Registers a new account in <ledger>.'
-  def register(ledger)
-    key = OpenSSL::PKey::RSA.new 2048
-    data = { public_key: key.public_key.to_pem, ledger: ledger }
+  desc 'register <asset>', 'Registers a new account to hold <asset>.'
+  def register(asset)
+    account_key = Key.new
+    data = {
+      account: {
+        ledgerHash: asset,
+        publicKey: account_key.public_key
+      }
+    }
     
-    begin
-      resp = RestClient.post "#{options.server}/accounts", { account: data }, content_type: :json, accept: :json
-      account = JSON.parse(resp.body, symbolize_names: true)[:account]
-      puts 'New account created'
-      puts "code:\t\t#{account[:code]}"
-      puts "balance:\t#{account[:balance]}"
-      
-      # Write key
-      FileUtils.mkdir_p "#{ENV['HOME']}/.hyperledger"
-      open "#{ENV['HOME']}/.hyperledger/#{account[:code]}.pem", 'w' do |io| io.write key.to_pem end
-    rescue => e
-      print_error(e)
-    end
+    response = post("#{options[:server]}/accounts", data, account_key)
+    puts 'New account created'
+    pp response
+    account_key.write
   end
 end
 
 class Hyperledger < Thor
-  include HyperledgerCli::ErrorPrinter
+  class_option :server, type: :string
   
-  class_option :server, type: :string, default: 'http://hyperledger-staging-1.herokuapp.com'
-  
-  desc 'ledger SUBCOMMAND', 'Subcommands relating to ledgers.'
-  subcommand 'ledger', Ledger
+  desc 'asset SUBCOMMAND', 'Subcommands relating to ledgers.'
+  subcommand 'asset', Asset
   
   desc 'account SUBCOMMAND', 'Subcommands relating to accounts.'
   subcommand 'account', Account
   
-  desc 'issue <amount> <ledger>', 'Issue <amount> new units to <ledger>.'
-  def issue(amount, ledger)
-    data = { ledger: ledger, amount: amount.to_i, uuid: SecureRandom.uuid }
+  desc 'issue <amount> <asset>', 'Issue <amount> new units of <asset>.'
+  def issue(amount, asset, public_key)
+    ledger_key = Key.new(public_key)
+    data = {
+      issue: {
+        uuid: SecureRandom.uuid,
+        ledgerHash: asset,
+        amount: amount.to_i
+      }
+    }
     
-    key = OpenSSL::PKey::RSA.new File.read("#{ENV['HOME']}/.hyperledger/#{ledger.downcase}.pem")
-    sign = Base64.encode64 key.sign(OpenSSL::Digest::SHA256.new, data.to_json)
-    
-    begin
-      resp = RestClient.post "#{options[:server]}/issues", { issue: data.merge({resource_signature: sign}) }.to_json, content_type: :json, accept: :json
-      puts "#{amount} new units issued to #{ledger}"
-    rescue => e
-      print_error(e)
-    end
+    response = post "#{options.server}/ledgers/#{asset}/issues", data, ledger_key
+    puts 'Issue completed!'
+    pp response
   end
   
   desc 'transfer <amount> <source> <destination>', 'Transfer <amount> of units from <source> to <destination>'
   def transfer(amount, source, destination)
-    key = OpenSSL::PKey::RSA.new File.read("#{ENV['HOME']}/.hyperledger/#{source}.pem")
-    
-    data = { source: source, destination: destination, amount: amount.to_i, uuid: SecureRandom.uuid }
-    sign = Base64.encode64 key.sign(OpenSSL::Digest::SHA256.new, data.to_json)
-    
-    begin
-      resp = RestClient.post "#{options.server}/transfers", { transfer: data.merge({resource_signature: sign}) }.to_json, content_type: :json, accept: :json
-      puts 'Transfer completed!'
-    rescue => e
-      print_error(e)
-    end
+    source_key = Key.new(source)
+    data = {
+      transfer: {
+        uuid: SecureRandom.uuid,
+        sourcePublicKey: source,
+        destinationPublicKey: destination,
+        amount: amount.to_i
+      }
+    }
+        
+    response = post "#{options.server}/transfers", data, source_key
+    puts 'Transfer completed!'
+    pp response
   end
 end
 
