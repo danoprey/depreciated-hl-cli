@@ -3,7 +3,7 @@ include OpenSSL
 
 module HyperledgerCli
   class Key
-    def initialize(public_key)
+    def initialize(public_key = nil)
       @key = if public_key
           PKey::EC.new(File.open(path(public_key)).read)
         else
@@ -11,7 +11,7 @@ module HyperledgerCli
         end
     end
     
-    def path(public_key)
+    def path(public_key = nil)
       root = "#{ENV['HOME']}/.hyperledger"
       if public_key
         "#{root}/#{public_key}.pem"

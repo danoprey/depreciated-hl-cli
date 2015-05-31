@@ -2,18 +2,15 @@
 
 require 'thor'
 require 'securerandom'
-require 'pp'
 require_relative '../lib/hyperledger_cli'
 require_relative '../lib/hyperledger_cli/key'
 
 include HyperledgerCli
 
-class Asset < Thor
-  
+class Asset < Thor  
   desc 'list', 'List all known assets'
   def list
-    response = get("#{options[:server]}/ledgers")
-    pp response
+    get "#{options[:server]}/assets"
   end
   
   desc 'register <hash>', 'Registers a new asset. The hash must be an unique hex encoded SHA265 hash.'
@@ -21,16 +18,14 @@ class Asset < Thor
     asset_key = Key.new
     primary_account_key = Key.new
     data = {
-      ledger: {
+      asset: {
         publicKey: asset_key.public_key,
         hash: hash,
         primaryAccountPublicKey: primary_account_key.public_key
       }
     }
     
-    response = post("#{options[:server]}/ledgers", data, asset_key)
-    puts 'New asset created'
-    pp response
+    post("#{options[:server]}/assets", data, asset_key)
     
     asset_key.write
     primary_account_key.write
@@ -40,8 +35,7 @@ end
 class Account < Thor
   desc 'list', 'List all known accounts'
   def list
-    response = get "#{options[:server]}/accounts"
-    pp response
+    get "#{options[:server]}/accounts"
   end
   
   desc 'register <asset>', 'Registers a new account to hold <asset>.'
@@ -49,20 +43,19 @@ class Account < Thor
     account_key = Key.new
     data = {
       account: {
-        ledgerHash: asset,
+        assetHash: asset,
         publicKey: account_key.public_key
       }
     }
     
-    response = post("#{options[:server]}/accounts", data, account_key)
-    puts 'New account created'
-    pp response
+    post("#{options[:server]}/accounts", data, account_key)
+    
     account_key.write
   end
 end
 
 class Hyperledger < Thor
-  class_option :server, type: :string
+  class_option :server, type: :string, required: true
   
   desc 'asset SUBCOMMAND', 'Subcommands relating to ledgers.'
   subcommand 'asset', Asset
@@ -70,20 +63,18 @@ class Hyperledger < Thor
   desc 'account SUBCOMMAND', 'Subcommands relating to accounts.'
   subcommand 'account', Account
   
-  desc 'issue <amount> <asset>', 'Issue <amount> new units of <asset>.'
+  desc 'issue <amount> <asset> <public key>', 'Issue <amount> new units of <asset> authorised by <public key>.'
   def issue(amount, asset, public_key)
-    ledger_key = Key.new(public_key)
+    asset_key = Key.new(public_key)
     data = {
       issue: {
         uuid: SecureRandom.uuid,
-        ledgerHash: asset,
+        assetHash: asset,
         amount: amount.to_i
       }
     }
     
-    response = post "#{options.server}/ledgers/#{asset}/issues", data, ledger_key
-    puts 'Issue completed!'
-    pp response
+    post("#{options.server}/assets/#{asset}/issues", data, asset_key)
   end
   
   desc 'transfer <amount> <source> <destination>', 'Transfer <amount> of units from <source> to <destination>'
@@ -98,9 +89,7 @@ class Hyperledger < Thor
       }
     }
         
-    response = post "#{options.server}/transfers", data, source_key
-    puts 'Transfer completed!'
-    pp response
+    post("#{options.server}/transfers", data, source_key)
   end
 end
 
