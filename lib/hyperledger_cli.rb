@@ -1,3 +1,4 @@
+require 'pp'
 require 'json'
 require 'restclient'
 require 'hyperledger_cli/version'
@@ -20,14 +21,19 @@ module HyperledgerCli
     end
     
     begin
-      response = JSON.parse(RestClient.post(url, json_data, headers))
-      response["uber"]["data"]
+      response = RestClient.post(url, json_data, headers)
+      pp JSON.parse(response)["uber"]["data"]
     rescue => e
       print_error(e)
     end
   end
   
   def get(url)
-    JSON.parse(RestClient.get(url, accept: 'application/vnd.uber-amundsen+json'))
+    begin
+      response = RestClient.get(url, accept: 'application/vnd.uber-amundsen+json')
+      pp JSON.parse(response)["uber"]["data"]
+    rescue => e
+      print_error(e)
+    end
   end
 end
